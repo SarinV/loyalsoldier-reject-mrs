@@ -30,6 +30,8 @@ https://raw.githubusercontent.com/SarinV/loyalsoldier-reject-mrs/release/proxy.m
 - This workflow runs at 00:30 UTC, or 08:30 Asia/Shanghai and Asia/Singapore,
   leaving two hours for upstream publication and CDN propagation.
 - `workflow_dispatch` supports an audited manual run.
+- Pull requests run the complete build and validation pipeline without
+  publishing the `release` branch.
 
 ## Pinned converter
 

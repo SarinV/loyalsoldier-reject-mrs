@@ -1,6 +1,9 @@
 name: Build and publish MRS rulesets
 
 on:
+  pull_request:
+    branches:
+      - main
   schedule:
     # Loyalsoldier documents a daily build at 06:30 Asia/Shanghai (22:30 UTC).
     # Run two hours later to leave time for the release branch and CDN to settle.
