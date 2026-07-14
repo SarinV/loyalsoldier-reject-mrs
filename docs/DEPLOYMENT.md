@@ -5,11 +5,11 @@ convert YAML on the router or on the AdGuard host.
 
 ## 1. Verify the cloud publication
 
-After the first successful GitHub Actions run, replace `<OWNER>/<REPO>` and
-download all three files on a development workstation:
+After the first successful GitHub Actions run, download all three files on a
+development workstation:
 
 ```bash
-base="https://raw.githubusercontent.com/<OWNER>/<REPO>/release"
+base="https://raw.githubusercontent.com/SarinV/loyalsoldier-reject-mrs/release"
 curl --fail --location --output reject.mrs "$base/reject.mrs"
 curl --fail --location --output reject.mrs.sha256 "$base/reject.mrs.sha256"
 curl --fail --location --output reject.meta "$base/reject.meta"
@@ -32,7 +32,7 @@ reject:
   behavior: domain
   format: mrs
   interval: 86400
-  url: https://raw.githubusercontent.com/<OWNER>/<REPO>/release/reject.mrs
+  url: https://raw.githubusercontent.com/SarinV/loyalsoldier-reject-mrs/release/reject.mrs
   path: ./ruleset/loyalsoldier/reject.mrs
 ```
 

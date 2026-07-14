@@ -18,10 +18,10 @@ After the first successful workflow run, the `release` branch contains exactly:
 The stable download address is:
 
 ```text
-https://raw.githubusercontent.com/<OWNER>/<REPO>/release/reject.mrs
+https://raw.githubusercontent.com/SarinV/loyalsoldier-reject-mrs/release/reject.mrs
 ```
 
-Replace `<OWNER>/<REPO>` only after creating the public repository.
+This URL becomes live after the first successful workflow publication.
 
 ## Schedule and data source
 
@@ -99,7 +99,7 @@ reject:
   behavior: domain
   format: mrs
   interval: 86400
-  url: https://raw.githubusercontent.com/<OWNER>/<REPO>/release/reject.mrs
+  url: https://raw.githubusercontent.com/SarinV/loyalsoldier-reject-mrs/release/reject.mrs
   path: ./ruleset/loyalsoldier/reject.mrs
 ```
 
