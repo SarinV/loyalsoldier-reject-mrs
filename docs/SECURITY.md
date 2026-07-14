@@ -10,11 +10,12 @@
   against the SHA-256 published on that release before execution.
 - The upstream rules are untrusted input. The workflow rejects NUL, unexpected
   size, non-canonical YAML shape, invalid scalars, duplicate rules and a rule
-  count below 150,000 before invoking Mihomo.
+  count below each provider's independently reviewed threshold before invoking
+  Mihomo.
 - Publishing uses a temporary Git worktree and one normal fast-forward commit.
-  It rechecks the MRS against both its checksum file and metadata, and never
-  force-pushes. Failure before `git push` leaves the old branch ref and all old
-  artifacts intact.
+  It rechecks all three MRS files against their checksum files and metadata,
+  publishes the nine-file set atomically, and never force-pushes. Failure before
+  `git push` leaves the old branch ref and all old artifacts intact.
 - Scheduled and manual jobs publish only when the workflow runs from the
   repository's default branch.
 

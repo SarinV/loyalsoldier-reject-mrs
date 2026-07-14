@@ -8,45 +8,16 @@ source "$repo_root/scripts/versions.env"
 
 python_bin="${PYTHON_BIN:-python3}"
 output_dir="${1:-$repo_root/dist}"
-work_dir="$(mktemp -d "${TMPDIR:-/tmp}/reject-mrs-build.XXXXXXXX")"
+work_dir="$(mktemp -d "${TMPDIR:-/tmp}/loyalsoldier-mrs-build.XXXXXXXX")"
 trap 'rm -rf -- "$work_dir"' EXIT
 
-mkdir -p "$output_dir"
-source_file="$work_dir/reject.txt"
-source_http_status="local"
-
-if [[ -n "${SOURCE_FILE:-}" ]]; then
-  cp -- "$SOURCE_FILE" "$source_file"
-else
-  source_http_status="$({
-    curl \
-      --proto '=https' \
-      --tlsv1.2 \
-      --fail \
-      --location \
-      --silent \
-      --show-error \
-      --retry 3 \
-      --retry-all-errors \
-      --connect-timeout 20 \
-      --max-time 180 \
-      --output "$source_file" \
-      --write-out '%{http_code}' \
-      "$SOURCE_URL"
-  })"
-  if [[ ! "$source_http_status" =~ ^2[0-9][0-9]$ ]]; then
-    echo "unexpected final HTTP status: $source_http_status" >&2
-    exit 1
-  fi
+read -r -a rulesets <<< "$RULESETS"
+if (( ${#rulesets[@]} == 0 )); then
+  echo "RULESETS is empty" >&2
+  exit 1
 fi
 
-"$python_bin" "$repo_root/scripts/validate_source.py" \
-  --input "$source_file" \
-  --min-bytes "$MIN_SOURCE_BYTES" \
-  --max-bytes "$MAX_SOURCE_BYTES" \
-  --min-rules "$MIN_RULES" \
-  --json-out "$work_dir/source.json" \
-  --canonical-out "$work_dir/source-rules.txt"
+mkdir -p "$output_dir"
 
 mihomo_mode="official_release"
 if [[ -n "${MIHOMO_BIN:-}" ]]; then
@@ -82,40 +53,112 @@ if [[ "${ALLOW_VERSION_MISMATCH:-0}" != "1" ]] && \
   exit 1
 fi
 
-"$mihomo_bin" convert-ruleset domain yaml "$source_file" "$work_dir/reject.mrs"
-if [[ ! -s "$work_dir/reject.mrs" ]]; then
-  echo "MRS output is empty" >&2
-  exit 1
-fi
-mrs_bytes="$(wc -c < "$work_dir/reject.mrs" | tr -d '[:space:]')"
-if (( mrs_bytes < MIN_MRS_BYTES )); then
-  echo "MRS output is unexpectedly small: $mrs_bytes bytes" >&2
-  exit 1
-fi
-
-# The official converter can export MRS back to text. Comparing the full set
-# catches a non-empty but semantically incomplete or malformed artifact.
-"$mihomo_bin" convert-ruleset domain mrs "$work_dir/reject.mrs" "$work_dir/roundtrip.txt"
-"$python_bin" "$repo_root/scripts/compare_rules.py" \
-  --source "$work_dir/source-rules.txt" \
-  --roundtrip "$work_dir/roundtrip.txt" \
-  --json-out "$work_dir/semantic.json"
-
-source_sha256="$($python_bin -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["sha256"])' "$work_dir/source.json")"
-source_bytes="$($python_bin -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["bytes"])' "$work_dir/source.json")"
-source_rule_count="$($python_bin -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["rule_count"])' "$work_dir/source.json")"
-mrs_sha256="$(sha256sum "$work_dir/reject.mrs" | awk '{print $1}')"
 generated_at_utc="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 publish_repository="${PUBLISH_REPOSITORY:-local/unpublished}"
 
-printf '%s  reject.mrs\n' "$mrs_sha256" > "$work_dir/reject.mrs.sha256"
-cat > "$work_dir/reject.meta" <<EOF
+for name in "${rulesets[@]}"; do
+  if [[ ! "$name" =~ ^[a-z0-9-]+$ ]]; then
+    echo "invalid ruleset name: $name" >&2
+    exit 1
+  fi
+
+  upper_name="${name^^}"
+  source_url_var="${upper_name}_SOURCE_URL"
+  min_source_bytes_var="${upper_name}_MIN_SOURCE_BYTES"
+  max_source_bytes_var="${upper_name}_MAX_SOURCE_BYTES"
+  min_rules_var="${upper_name}_MIN_RULES"
+  min_mrs_bytes_var="${upper_name}_MIN_MRS_BYTES"
+  source_file_override_var="${upper_name}_SOURCE_FILE"
+
+  source_url="${!source_url_var:-}"
+  min_source_bytes="${!min_source_bytes_var:-}"
+  max_source_bytes="${!max_source_bytes_var:-}"
+  min_rules="${!min_rules_var:-}"
+  min_mrs_bytes="${!min_mrs_bytes_var:-}"
+  source_file_override="${!source_file_override_var:-}"
+
+  if [[ -z "$source_url" || -z "$min_source_bytes" ||
+        -z "$max_source_bytes" || -z "$min_rules" ||
+        -z "$min_mrs_bytes" ]]; then
+    echo "incomplete guard configuration for $name" >&2
+    exit 1
+  fi
+
+  source_file="$work_dir/$name.txt"
+  source_http_status="local"
+  if [[ -n "$source_file_override" ]]; then
+    cp -- "$source_file_override" "$source_file"
+  elif [[ -n "${SOURCE_DIR:-}" ]]; then
+    cp -- "$SOURCE_DIR/$name.txt" "$source_file"
+  else
+    source_http_status="$({
+      curl \
+        --proto '=https' \
+        --tlsv1.2 \
+        --fail \
+        --location \
+        --silent \
+        --show-error \
+        --retry 3 \
+        --retry-all-errors \
+        --connect-timeout 20 \
+        --max-time 180 \
+        --output "$source_file" \
+        --write-out '%{http_code}' \
+        "$source_url"
+    })"
+    if [[ ! "$source_http_status" =~ ^2[0-9][0-9]$ ]]; then
+      echo "$name: unexpected final HTTP status: $source_http_status" >&2
+      exit 1
+    fi
+  fi
+
+  "$python_bin" "$repo_root/scripts/validate_source.py" \
+    --input "$source_file" \
+    --min-bytes "$min_source_bytes" \
+    --max-bytes "$max_source_bytes" \
+    --min-rules "$min_rules" \
+    --json-out "$work_dir/$name.source.json" \
+    --canonical-out "$work_dir/$name.source-rules.txt"
+
+  "$mihomo_bin" convert-ruleset domain yaml "$source_file" "$work_dir/$name.mrs"
+  if [[ ! -s "$work_dir/$name.mrs" ]]; then
+    echo "$name: MRS output is empty" >&2
+    exit 1
+  fi
+  mrs_bytes="$(wc -c < "$work_dir/$name.mrs" | tr -d '[:space:]')"
+  if (( mrs_bytes < min_mrs_bytes )); then
+    echo "$name: MRS output is unexpectedly small: $mrs_bytes bytes" >&2
+    exit 1
+  fi
+
+  # Exporting MRS back to text and comparing the complete normalized set catches
+  # a non-empty but semantically incomplete or malformed artifact.
+  "$mihomo_bin" convert-ruleset domain mrs "$work_dir/$name.mrs" "$work_dir/$name.roundtrip.txt"
+  "$python_bin" "$repo_root/scripts/compare_rules.py" \
+    --source "$work_dir/$name.source-rules.txt" \
+    --roundtrip "$work_dir/$name.roundtrip.txt" \
+    --json-out "$work_dir/$name.semantic.json"
+
+  source_sha256="$($python_bin -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["sha256"])' "$work_dir/$name.source.json")"
+  source_bytes="$($python_bin -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["bytes"])' "$work_dir/$name.source.json")"
+  source_rule_count="$($python_bin -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["rule_count"])' "$work_dir/$name.source.json")"
+  mrs_export_rule_count="$($python_bin -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["roundtrip_rule_count"])' "$work_dir/$name.semantic.json")"
+  normalized_redundant_exact_rules="$($python_bin -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["normalized_redundant_exact_rules"])' "$work_dir/$name.semantic.json")"
+  mrs_sha256="$(sha256sum "$work_dir/$name.mrs" | awk '{print $1}')"
+
+  printf '%s  %s.mrs\n' "$mrs_sha256" "$name" > "$work_dir/$name.mrs.sha256"
+  cat > "$work_dir/$name.meta" <<EOF
 schema_version=1
-source_url=$SOURCE_URL
+provider_name=$name
+behavior=domain
+source_url=$source_url
 source_http_status=$source_http_status
 source_sha256=$source_sha256
 source_bytes=$source_bytes
 source_rule_count=$source_rule_count
+normalized_redundant_exact_rules=$normalized_redundant_exact_rules
+mrs_export_rule_count=$mrs_export_rule_count
 mrs_sha256=$mrs_sha256
 mrs_bytes=$mrs_bytes
 mihomo_version=$MIHOMO_VERSION
@@ -129,15 +172,23 @@ repository=$publish_repository
 source_license=GPL-3.0
 converter_license=GPL-3.0
 EOF
+done
 
-# Copy only after every validation has succeeded. The release branch itself is
-# updated later by one Git commit, so partial build output is never published.
-cp -- "$work_dir/reject.mrs" "$output_dir/reject.mrs.new"
-cp -- "$work_dir/reject.mrs.sha256" "$output_dir/reject.mrs.sha256.new"
-cp -- "$work_dir/reject.meta" "$output_dir/reject.meta.new"
-mv -f -- "$output_dir/reject.mrs.new" "$output_dir/reject.mrs"
-mv -f -- "$output_dir/reject.mrs.sha256.new" "$output_dir/reject.mrs.sha256"
-mv -f -- "$output_dir/reject.meta.new" "$output_dir/reject.meta"
+# Publish to the requested output directory only after every provider has
+# passed download, strict validation, conversion, and semantic round-trip.
+for name in "${rulesets[@]}"; do
+  for suffix in mrs mrs.sha256 meta; do
+    cp -- "$work_dir/$name.$suffix" "$output_dir/$name.$suffix.new"
+  done
+done
+for name in "${rulesets[@]}"; do
+  for suffix in mrs mrs.sha256 meta; do
+    mv -f -- "$output_dir/$name.$suffix.new" "$output_dir/$name.$suffix"
+  done
+done
 
 echo "Build complete:"
-cat "$output_dir/reject.meta"
+for name in "${rulesets[@]}"; do
+  echo "--- $name.meta ---"
+  cat "$output_dir/$name.meta"
+done

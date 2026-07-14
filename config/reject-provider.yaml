@@ -1,9 +1,0 @@
-# Published by the repository's release workflow after a successful build.
-rule-providers:
-  reject:
-    type: http
-    behavior: domain
-    format: mrs
-    interval: 86400
-    url: https://raw.githubusercontent.com/SarinV/loyalsoldier-reject-mrs/release/reject.mrs
-    path: ./ruleset/loyalsoldier/reject.mrs

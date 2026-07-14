@@ -16,6 +16,12 @@ class RepositoryPolicyTests(unittest.TestCase):
         self.assertIn('    - cron: "30 0 * * *"', workflow)
         self.assertRegex(workflow, r"(?m)^  workflow_dispatch:\s*$")
         self.assertIn("permissions:\n  contents: write\n", workflow)
+        self.assertIn(
+            "      - name: Publish the release branch\n"
+            "        if: github.ref == format('refs/heads/{0}', "
+            "github.event.repository.default_branch)",
+            workflow,
+        )
         permission_block = re.search(
             r"(?ms)^permissions:\n(.*?)(?=^[a-zA-Z])", workflow
         )
@@ -34,24 +40,35 @@ class RepositoryPolicyTests(unittest.TestCase):
             ],
         )
 
-    def test_converter_and_source_are_explicitly_pinned(self) -> None:
+    def test_converter_and_sources_are_explicitly_pinned(self) -> None:
         versions = (ROOT / "scripts/versions.env").read_text(encoding="utf-8")
         self.assertIn('MIHOMO_VERSION="v1.19.28"', versions)
         self.assertRegex(versions, r'(?m)^MIHOMO_ASSET_SHA256="[0-9a-f]{64}"$')
-        self.assertIn(
-            'SOURCE_URL="https://fastly.jsdelivr.net/gh/Loyalsoldier/'
-            'clash-rules@release/reject.txt"',
-            versions,
-        )
+        self.assertIn('RULESETS="reject direct proxy"', versions)
+        for name in ("reject", "direct", "proxy"):
+            self.assertIn(
+                f'{name.upper()}_SOURCE_URL="https://fastly.jsdelivr.net/gh/'
+                f'Loyalsoldier/clash-rules@release/{name}.txt"',
+                versions,
+            )
+            self.assertRegex(
+                versions,
+                rf'(?m)^{name.upper()}_MIN_RULES="[0-9]+"$',
+            )
         self.assertNotIn("latest", versions.lower())
 
-    def test_publication_is_non_forced_and_config_uses_mrs(self) -> None:
+    def test_publication_is_non_forced_and_configs_use_mrs(self) -> None:
         publisher = (ROOT / "scripts/publish-release.sh").read_text(encoding="utf-8")
+        builder = (ROOT / "scripts/build.sh").read_text(encoding="utf-8")
         self.assertNotRegex(publisher, r"(?m)^.*git\s+.*push\s+.*--force")
         self.assertIn('push origin HEAD:release', publisher)
-        config = (ROOT / "config/reject-provider.yaml").read_text(encoding="utf-8")
-        self.assertIn("format: mrs", config)
-        self.assertIn("path: ./ruleset/loyalsoldier/reject.mrs", config)
+        self.assertIn("normalized_redundant_exact_rules=", builder)
+        self.assertIn("mrs_export_rule_count=", builder)
+        config = (ROOT / "config/rule-providers.yaml").read_text(encoding="utf-8")
+        self.assertEqual(config.count("format: mrs"), 3)
+        for name in ("reject", "direct", "proxy"):
+            self.assertIn(f"path: ./ruleset/loyalsoldier/{name}.mrs", config)
+            self.assertIn(f"release/{name}.mrs", config)
 
 
 if __name__ == "__main__":
