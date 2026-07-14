@@ -2,51 +2,52 @@
 
 Test date: 2026-07-14
 
-The local workstation was used only for validation. No router, AdGuard host, or
-GitHub repository was changed.
+The local workstation was used only for download, validation, and conversion.
+No router or AdGuard host was changed.
 
-## Audited full input
+## Full current inputs
 
-Input: the preserved 2026-07-14 Loyalsoldier `reject.txt` snapshot captured
-during the Mihomo OOM audit.
+All three sources were downloaded from the URLs pinned in
+`scripts/versions.env`, passed strict validation, converted with the audited
+official Mihomo source baseline, exported back to normalized text, and compared
+as complete effective rule sets.
 
-| Check | Result |
-| --- | --- |
-| Input bytes | 4,731,145 |
-| Input SHA-256 | `ce8186fc60626e57e814acb856dca6c91b698d6e9053406dc2f22a084cade363` |
-| Rules | 165,713 |
-| Unique rules | 165,713 |
-| Strict source validation | PASS |
-| MRS bytes | 1,583,605 |
-| MRS SHA-256 | `326f265d2ce23471853af7782c2988bc0a5773c28a6c85c44c3a04d8ae68f30e` |
-| MRS round-trip source-only rules | 0 |
-| MRS round-trip output-only rules | 0 |
+| Provider | Input bytes | Input rules | Input SHA-256 | MRS bytes | MRS SHA-256 |
+| --- | ---: | ---: | --- | ---: | --- |
+| reject | 4,731,145 | 165,713 | `ce8186fc60626e57e814acb856dca6c91b698d6e9053406dc2f22a084cade363` | 1,583,605 | `326f265d2ce23471853af7782c2988bc0a5773c28a6c85c44c3a04d8ae68f30e` |
+| direct | 2,324,011 | 112,274 | `9567b45a71359851ea28f8e42d5664d0da9ba1970b485a1fa2a59d6514ac559e` | 543,947 | `79901a429cc8b6998c57b93703334ddf11d3b3179a8b92ede5233b4a563400e4` |
+| proxy | 611,983 | 26,842 | `21709f4b368ae3908495c7d484e3821a6efcdc5e0634553157c555b3a6f5154d` | 196,640 | `17551485656665dcf58ddda8412d228b00ef6ac8a098d7cf20940492cee96111` |
 
-An already-built official Mihomo source baseline was used for the local
-functional conversion. It reproduced the audited MRS byte-for-byte in about
-4.34 seconds. This confirms the command, validator, rule-count check, and
-full-set semantic comparison on the complete input.
+Mihomo's DomainSet text export intentionally suppresses an exact domain when
+the same source also contains `+.<domain>`, because the suffix rule already
+creates the exact matcher node. This normalized 52 redundant exact spellings
+in `direct` and one in `proxy`; all remaining effective rules matched exactly,
+with zero source-only and zero output-only rules. The MRS header still records
+the source strategy count, so the expected provider API counts are 112,274 and
+26,842 respectively.
 
-## Automated tests
+## Automated checks
 
-- `python3 -m unittest discover -s tests -p 'test_*.py' -v`: 12/12 PASS.
-- GitHub workflow YAML parsed successfully with `gopkg.in/yaml.v3`.
-- `tests/test_publish.sh` covers first publication, unchanged-input no-op, and
-  a second changed-input fast-forward publication, plus a corrupted-artifact
-  rejection that leaves the release ref unchanged. It is executed by the
-  GitHub workflow before any production build or push.
+- Python unit and repository-policy tests: 14/14 PASS.
+- GitHub workflow YAML: parsed successfully with `gopkg.in/yaml.v3`.
+- Complete source validation and semantic MRS round-trip: PASS for all three.
+- `reject.mrs` remained byte-identical to the already-audited production file.
+- `tests/test_publish.sh` now covers atomic nine-file publication, a no-op when
+  all source/MRS hashes are unchanged, an update where only one provider
+  changes, and corruption rejection before the release ref changes.
 
-## Deliberately pending CI checks
+## CI checks still required
 
-The local Windows sandbox has neither a working Bash runtime nor outbound
-access to GitHub release assets. Therefore these checks are intentionally left
-for the first reviewed `workflow_dispatch` run on GitHub's Ubuntu runner:
+The local Windows runtime does not include Bash. The first reviewed GitHub
+Actions run must therefore execute:
 
 - `bash -n` over all shell scripts;
 - the transactional publication shell test;
-- download of the pinned official Mihomo v1.19.28 Linux AMD64 asset;
-- verification of its pinned SHA-256;
-- `mihomo -v` equality check and the complete v1.19.28 conversion pipeline.
+- download and SHA-256 verification of the pinned official Mihomo v1.19.28
+  Linux AMD64 asset;
+- `mihomo -v` equality and the complete three-provider build using that exact
+  release binary;
+- atomic update of the existing `release` branch from three files to nine.
 
-Do not deploy the raw URL until that first workflow run passes and the three
-files on the `release` branch have been inspected.
+Do not switch `direct` or `proxy` on the router until that run passes and both
+new MRS files, checksum files, and metadata files are visible on `release`.

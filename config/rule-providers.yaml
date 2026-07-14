@@ -1,0 +1,24 @@
+# Published together by the repository's release workflow after every source,
+# conversion, and semantic check succeeds.
+rule-providers:
+  reject:
+    type: http
+    behavior: domain
+    format: mrs
+    interval: 86400
+    url: https://raw.githubusercontent.com/SarinV/loyalsoldier-reject-mrs/release/reject.mrs
+    path: ./ruleset/loyalsoldier/reject.mrs
+  direct:
+    type: http
+    behavior: domain
+    format: mrs
+    interval: 86400
+    url: https://raw.githubusercontent.com/SarinV/loyalsoldier-reject-mrs/release/direct.mrs
+    path: ./ruleset/loyalsoldier/direct.mrs
+  proxy:
+    type: http
+    behavior: domain
+    format: mrs
+    interval: 86400
+    url: https://raw.githubusercontent.com/SarinV/loyalsoldier-reject-mrs/release/proxy.mrs
+    path: ./ruleset/loyalsoldier/proxy.mrs

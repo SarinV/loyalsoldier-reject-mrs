@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Strict validator for Loyalsoldier's canonical reject.txt YAML shape.
+"""Strict validator for Loyalsoldier's canonical domain-provider YAML shape.
 
 This intentionally accepts a small, auditable subset of YAML: one top-level
 `payload:` sequence containing plain, single-quoted, or JSON-compatible
