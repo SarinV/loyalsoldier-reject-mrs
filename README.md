@@ -32,6 +32,8 @@ https://raw.githubusercontent.com/SarinV/loyalsoldier-reject-mrs/release/proxy.m
 - `workflow_dispatch` supports an audited manual run.
 - Pull requests run the complete build and validation pipeline without
   publishing the `release` branch.
+- A push to `main` runs the same checks and publishes only when at least one
+  validated source or MRS hash has changed.
 
 ## Pinned converter
 

@@ -15,6 +15,7 @@ class RepositoryPolicyTests(unittest.TestCase):
         )
         self.assertIn('    - cron: "30 0 * * *"', workflow)
         self.assertIn("  pull_request:\n    branches:\n      - main\n", workflow)
+        self.assertIn("  push:\n    branches:\n      - main\n", workflow)
         self.assertRegex(workflow, r"(?m)^  workflow_dispatch:\s*$")
         self.assertIn("permissions:\n  contents: write\n", workflow)
         self.assertIn(
