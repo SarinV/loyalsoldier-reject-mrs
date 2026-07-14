@@ -1,0 +1,5 @@
+dist/
+.work/
+.test-tmp/
+__pycache__/
+*.pyc

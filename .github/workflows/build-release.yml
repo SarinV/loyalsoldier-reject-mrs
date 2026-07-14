@@ -1,0 +1,64 @@
+name: Build and publish reject.mrs
+
+on:
+  schedule:
+    # Loyalsoldier documents a daily build at 06:30 Asia/Shanghai (22:30 UTC).
+    # Run two hours later to leave time for the release branch and CDN to settle.
+    - cron: "30 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: reject-mrs-release
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out the default branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Check scripts and validators
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash -n scripts/*.sh tests/*.sh
+          python3 -m unittest discover -s tests -p 'test_*.py' -v
+          ./tests/test_publish.sh
+
+      - name: Build and validate release artifacts
+        shell: bash
+        env:
+          PUBLISH_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -Eeuo pipefail
+          ./scripts/build.sh "$RUNNER_TEMP/reject-release"
+          cat "$RUNNER_TEMP/reject-release/reject.meta"
+
+      - name: Publish the release branch
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ./scripts/publish-release.sh "$RUNNER_TEMP/reject-release"
+
+      - name: Write job summary
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f "$RUNNER_TEMP/reject-release/reject.meta" ]]; then
+            {
+              echo '## reject.mrs build metadata'
+              echo '```text'
+              cat "$RUNNER_TEMP/reject-release/reject.meta"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
